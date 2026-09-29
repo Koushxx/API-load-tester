@@ -1,0 +1,5 @@
+# Runtime: none — the tool uses only the Python standard library.
+#
+# The packages below are for BUILDING the standalone .exe distributables.
+# Install them with:  pip install -r requirements.txt
+pyinstaller>=6.0

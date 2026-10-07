@@ -1,6 +1,6 @@
 """API Load Tester - a dependency-free tool to load-test HTTP APIs."""
 
-__version__ = "1.0.0"
+__version__ = "1.1"
 
 from .core import (
     LoadTestConfig,

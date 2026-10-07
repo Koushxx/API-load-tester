@@ -31,6 +31,11 @@ class LoadTestConfig:
     timeout: float = 30.0
     verify_ssl: bool = True
     threshold_ms: Optional[float] = None
+    # TLS client authentication (mutual TLS) and custom trust store.
+    client_cert: Optional[str] = None
+    client_key: Optional[str] = None
+    client_key_password: Optional[str] = None
+    ca_cert: Optional[str] = None
 
 
 @dataclass
@@ -109,14 +114,49 @@ def parse_headers(header_lines: List[str]) -> Dict[str, str]:
     return headers
 
 
-def _send_one(config: LoadTestConfig, body_bytes: Optional[bytes]) -> RequestResult:
-    """Send a single request and time it."""
-    context = None
-    if config.url.lower().startswith("https") and not config.verify_ssl:
-        context = ssl.create_default_context()
+def build_ssl_context(config: LoadTestConfig) -> Optional[ssl.SSLContext]:
+    """
+    Build an SSLContext for the request, or None for plain HTTP.
+
+    Handles three independent concerns:
+      * Custom CA bundle (``ca_cert``) to trust private/self-signed servers.
+      * Disabling verification (``verify_ssl=False``) for quick, insecure tests.
+      * Client certificate authentication / mutual TLS (``client_cert``).
+    """
+    if not config.url.lower().startswith("https"):
+        return None
+
+    needs_context = (
+        not config.verify_ssl
+        or config.ca_cert
+        or config.client_cert
+    )
+    if not needs_context:
+        return None
+
+    context = ssl.create_default_context()
+    if config.ca_cert:
+        context.load_verify_locations(cafile=config.ca_cert)
+
+    if not config.verify_ssl:
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
 
+    if config.client_cert:
+        context.load_cert_chain(
+            certfile=config.client_cert,
+            keyfile=config.client_key or None,
+            password=config.client_key_password or None,
+        )
+    return context
+
+
+def _send_one(
+    config: LoadTestConfig,
+    body_bytes: Optional[bytes],
+    context: Optional[ssl.SSLContext] = None,
+) -> RequestResult:
+    """Send a single request and time it."""
     req = urllib.request.Request(url=config.url, data=body_bytes, method=config.method.upper())
     for key, value in config.headers.items():
         req.add_header(key, value)
@@ -150,13 +190,17 @@ def run_load_test(
     """
     body_bytes = config.body.encode("utf-8") if config.body else None
 
+    # Build the TLS context once and share it across all worker threads
+    # (SSLContext is thread-safe and avoids re-reading cert files per request).
+    context = build_ssl_context(config)
+
     results: List[RequestResult] = []
     overall_start = time.perf_counter()
     completed = 0
 
     with ThreadPoolExecutor(max_workers=config.concurrency) as executor:
         futures = [
-            executor.submit(_send_one, config, body_bytes)
+            executor.submit(_send_one, config, body_bytes, context)
             for _ in range(config.requests)
         ]
         for future in as_completed(futures):

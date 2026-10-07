@@ -11,6 +11,7 @@ import argparse
 import sys
 
 from .core import LoadTestConfig, LoadTestReport, parse_headers, run_load_test
+from . import __version__
 
 
 def _format_report(report: LoadTestReport) -> str:
@@ -55,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("url", nargs="?", help="Target API endpoint URL.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-X", "--method", default="POST", help="HTTP method.")
     parser.add_argument("-c", "--concurrency", type=int, default=100, help="Concurrent workers.")
     parser.add_argument("-n", "--requests", type=int, default=100, help="Total requests.")
@@ -64,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-t", "--timeout", type=float, default=30.0, help="Per-request timeout (s).")
     parser.add_argument("--threshold-ms", type=float, default=None, help="Max acceptable response time (ms).")
     parser.add_argument("--no-verify-ssl", dest="verify_ssl", action="store_false", help="Disable TLS verification.")
+    parser.add_argument("--ca-cert", default=None, help="Path to a custom CA bundle (PEM) to trust the server cert.")
+    parser.add_argument("--client-cert", default=None, help="Path to client certificate (PEM) for mutual TLS.")
+    parser.add_argument("--client-key", default=None, help="Path to client private key (PEM). Omit if key is in --client-cert.")
+    parser.add_argument("--key-password", default=None, help="Password for an encrypted client private key.")
     parser.add_argument("--gui", action="store_true", help="Launch the graphical interface.")
     parser.set_defaults(verify_ssl=True)
     return parser
@@ -71,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def prompt_interactive() -> list[str]:
     print("=" * 60)
-    print(" API Load Tester - interactive mode")
+    print(f" API Load Tester v{__version__} - interactive mode")
     print("=" * 60)
     print("(Press Enter to accept the [default] shown in brackets.)\n")
 
@@ -149,6 +155,10 @@ def main(argv=None) -> int:
         timeout=args.timeout,
         verify_ssl=args.verify_ssl,
         threshold_ms=args.threshold_ms,
+        client_cert=args.client_cert,
+        client_key=args.client_key,
+        client_key_password=args.key_password,
+        ca_cert=args.ca_cert,
     )
 
     print(f"Target        : {config.method} {config.url}")

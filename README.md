@@ -25,6 +25,8 @@ Designed for test cases like:
 - Configure URL, HTTP method, total requests, and concurrency.
 - Custom headers and request body.
 - Per-request timeout and optional TLS verification toggle (self-signed certs).
+- **TLS client authentication (mutual TLS)** — present a client certificate/key,
+  and trust private servers via a custom CA bundle.
 - **Live progress bar** and request counter (GUI).
 - **Run in background with a Stop button** — the GUI stays responsive.
 - Response-time stats: min / avg / median / **p90 / p95 / p99** / max.
@@ -70,6 +72,10 @@ python load_test.py <URL> [options]
 | `-t`, `--timeout` | `30` | Per-request timeout (seconds). |
 | `--threshold-ms` | none | Max acceptable response time for PASS/FAIL. |
 | `--no-verify-ssl` | off | Skip TLS verification (self-signed certs). |
+| `--ca-cert` | none | Custom CA bundle (PEM) used to trust the server certificate. |
+| `--client-cert` | none | Client certificate (PEM) for mutual TLS. |
+| `--client-key` | none | Client private key (PEM). Omit if the key is bundled in `--client-cert`. |
+| `--key-password` | none | Password for an encrypted client private key. |
 | `--gui` | — | Launch the desktop GUI instead. |
 
 ### Example: the 41076 scenario
@@ -85,6 +91,25 @@ python load_test.py https://your-api.com/endpoint `
 ```
 
 Exit code is `0` on PASS and `1` on FAIL, so it plugs straight into CI.
+
+### Example: mutual TLS (client certificate)
+
+For APIs that require the client to authenticate with a certificate, provide the
+client cert/key and (if the server uses a private CA) a CA bundle to trust it:
+
+```powershell
+python load_test.py https://secure-api.internal/v1/ping `
+    --client-cert client.pem `
+    --client-key client.key `
+    --ca-cert corp-ca.pem `
+    --concurrency 50 `
+    --requests 500
+```
+
+If the client key is encrypted, add `--key-password <pass>`. If the certificate
+and key are combined in one PEM file, pass only `--client-cert`. In the GUI, the
+same options live in the **“TLS client authentication (mutual TLS) / custom CA”**
+panel with file pickers.
 
 ---
 

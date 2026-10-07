@@ -35,6 +35,7 @@ from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
 from .core import LoadTestConfig, LoadTestReport, parse_headers, run_load_test
+from . import __version__
 
 HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
@@ -42,7 +43,7 @@ HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 class LoadTesterApp:
     def __init__(self, root: Tk):
         self.root = root
-        self.root.title("API Load Tester")
+        self.root.title(f"API Load Tester v{__version__}")
         self.root.geometry("880x760")
         self.root.minsize(760, 640)
 
@@ -102,6 +103,26 @@ class LoadTesterApp:
             variable=self.verify_ssl_var,
         ).pack(anchor=W, pady=(4, 0))
 
+        # --- TLS / mutual TLS ---------------------------------------------
+        tls = ttk.LabelFrame(
+            container, text="TLS client authentication (mutual TLS) / custom CA", padding=10
+        )
+        tls.pack(fill=X, pady=(8, 0))
+        self.ca_cert_var = StringVar()
+        self.client_cert_var = StringVar()
+        self.client_key_var = StringVar()
+        self.key_password_var = StringVar()
+        self._file_row(tls, "CA bundle (PEM):", self.ca_cert_var)
+        self._file_row(tls, "Client cert (PEM):", self.client_cert_var)
+        self._file_row(tls, "Client key (PEM):", self.client_key_var)
+
+        pwd_row = ttk.Frame(tls)
+        pwd_row.pack(fill=X, pady=2)
+        ttk.Label(pwd_row, text="Key password:", width=16).pack(side=LEFT)
+        ttk.Entry(pwd_row, textvariable=self.key_password_var, show="*").pack(
+            side=LEFT, fill=X, expand=True
+        )
+
         # Headers + body side by side
         panes = ttk.Frame(container)
         panes.pack(fill=BOTH, expand=True, pady=(8, 0))
@@ -159,6 +180,27 @@ class LoadTesterApp:
         ttk.Label(cell, text=label).pack(anchor=W)
         ttk.Entry(cell, textvariable=var, width=12).pack()
 
+    def _file_row(self, parent, label, var):
+        row = ttk.Frame(parent)
+        row.pack(fill=X, pady=2)
+        ttk.Label(row, text=label, width=16).pack(side=LEFT)
+        ttk.Entry(row, textvariable=var).pack(side=LEFT, fill=X, expand=True)
+        ttk.Button(
+            row, text="Browse…", width=9,
+            command=lambda: self._pick_file(var),
+        ).pack(side=LEFT, padx=(6, 0))
+
+    def _pick_file(self, var: StringVar):
+        path = filedialog.askopenfilename(
+            title="Select certificate / key file",
+            filetypes=[
+                ("PEM / certificate", "*.pem *.crt *.cer *.key"),
+                ("All files", "*.*"),
+            ],
+        )
+        if path:
+            var.set(path)
+
     # ------------------------------------------------------------- helpers
     def _collect_config(self) -> LoadTestConfig:
         url = self.url_var.get().strip()
@@ -193,6 +235,10 @@ class LoadTesterApp:
             timeout=timeout,
             verify_ssl=self.verify_ssl_var.get(),
             threshold_ms=threshold,
+            client_cert=self.client_cert_var.get().strip() or None,
+            client_key=self.client_key_var.get().strip() or None,
+            client_key_password=self.key_password_var.get() or None,
+            ca_cert=self.ca_cert_var.get().strip() or None,
         )
 
     def _set_running(self, running: bool):
@@ -325,6 +371,9 @@ class LoadTesterApp:
             "timeout": config.timeout,
             "threshold_ms": config.threshold_ms,
             "verify_ssl": config.verify_ssl,
+            "ca_cert": config.ca_cert,
+            "client_cert": config.client_cert,
+            "client_key": config.client_key,
             "headers": config.headers,
             "body": config.body,
         }
@@ -354,6 +403,10 @@ class LoadTesterApp:
         threshold = data.get("threshold_ms")
         self.threshold_var.set("" if threshold is None else str(threshold))
         self.verify_ssl_var.set(bool(data.get("verify_ssl", True)))
+        self.ca_cert_var.set(data.get("ca_cert") or "")
+        self.client_cert_var.set(data.get("client_cert") or "")
+        self.client_key_var.set(data.get("client_key") or "")
+        self.key_password_var.set("")
 
         self.headers_text.delete("1.0", END)
         headers = data.get("headers", {})
